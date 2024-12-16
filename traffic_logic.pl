@@ -1,85 +1,64 @@
-% Hechos
-
+% Estados de los semáforos
 estado(verde).
 estado(amarillo).
 estado(rojo).
 
-transicion(verde, amarillo).
-transicion(amarillo, rojo).
-transicion(rojo, verde).
-
-semaforo(sem1, cruce1, verde, sem2).
-semaforo(sem2, cruce1, rojo, sem3).
-semaforo(sem3, cruce1, rojo, sem4).
-semaforo(sem4, cruce1, rojo, sem1).
-
-semaforo(sem5, cruce2, verde, sem6).
-semaforo(sem6, cruce2, rojo, sem7).
-semaforo(sem7, cruce2, rojo, sem8).
-semaforo(sem8, cruce2, rojo, sem5).
-
-semaforo(sem9, cruce3, verde, sem10).
-semaforo(sem10, cruce3, rojo, sem11).
-semaforo(sem11, cruce3, rojo, sem12).
-semaforo(sem12, cruce3, rojo, sem9).
-
-cruce(cruce1, [blvd_gaxiola, av_bienestar]).
-cruce(cruce2, [blvd_gaxiola, blvd_rosendo_g_castro]).
-cruce(cruce3, [blvd_gaxiola, lic_benito_juarez]).
-
-:- dynamic semaforo_estado/2. 
-
+% Semáforos con su estado inicial
+:- dynamic semaforo_estado/2.
 semaforo_estado(sem1, verde).
 semaforo_estado(sem2, rojo).
 semaforo_estado(sem3, rojo).
 semaforo_estado(sem4, rojo).
-semaforo_estado(sem5, verde).
-semaforo_estado(sem6, rojo).
-semaforo_estado(sem7, rojo).
-semaforo_estado(sem8, rojo).
-semaforo_estado(sem9, verde).
-semaforo_estado(sem10, rojo).
-semaforo_estado(sem11, rojo).
-semaforo_estado(sem12, rojo).
 
-colindancia(cruce1, [sem1, sem2, sem3, sem4]).
-colindancia(cruce2, [sem5, sem6, sem7, sem8]).
-colindancia(cruce3, [sem9, sem10, sem11, sem12]).
+% Secuencia de estados personalizados
+secuencia([
+    [verde, rojo, rojo, rojo],    % G R R R
+    [amarillo, rojo, rojo, rojo], % Y R R R
+    [rojo, verde, rojo, rojo],    % R G R R
+    [rojo, amarillo, rojo, rojo], % R Y R R
+    [rojo, rojo, verde, rojo],    % R R G R
+    [rojo, rojo, amarillo, rojo], % R R Y R
+    [rojo, rojo, rojo, verde],    % R R R G
+    [rojo, rojo, rojo, amarillo], % R R R Y
+    [rojo, rojo, rojo, rojo]      % R R R R
+]).
 
-% Reglas
+% Índice dinámico para la secuencia
+:- dynamic indice_secuencia/1.
+indice_secuencia(1).  % Comenzamos en la primera posición de la secuencia
 
-estado_cruce(Cruce, Estados) :-
-    colindancia(Cruce, Semaforos),
-    findall(Estado, (member(Semaforo, Semaforos), semaforo_estado(Semaforo, Estado)), Estados).
+% Avanzar al siguiente estado en la secuencia
+avanzar_estado :-
+    secuencia(Secuencia),
+    indice_secuencia(IndiceActual),
+    length(Secuencia, Longitud),
+    nth1(IndiceActual, Secuencia, EstadosActuales),  % Obtener el estado actual
+    actualizar_estados(EstadosActuales),            % Actualizar semáforos
+    siguiente_indice(IndiceActual, Longitud).       % Calcular el siguiente índice
 
-sincronizar_cruce(Cruce) :-
-    colindancia(Cruce, Semaforos),
-    member(SemaforoActual, Semaforos),
-    semaforo(SemaforoActual, Cruce, verde, SiguienteSemaforo),
-    sincronizar_semaforos(SemaforoActual, SiguienteSemaforo).
+% Calcular el siguiente índice cíclico
+siguiente_indice(IndiceActual, Longitud) :-
+    NuevoIndice is (IndiceActual mod Longitud) + 1,
+    retractall(indice_secuencia(_)),  % Eliminar el índice anterior
+    assertz(indice_secuencia(NuevoIndice)).
 
-sincronizar_semaforos(SemaforoActual, SiguienteSemaforo) :-
-    semaforo_estado(SemaforoActual, EstadoActual),
-    (EstadoActual == verde -> 
-        transicion(EstadoActual, NuevoEstadoActual),
-        retract(semaforo_estado(SemaforoActual, EstadoActual)),
-        assertz(semaforo_estado(SemaforoActual, NuevoEstadoActual))
-    ;
-        true
-    ),
-    semaforo_estado(SemaforoActual, EstadoActual2),
-    (EstadoActual2 == amarillo ->
-        transicion(EstadoActual2, EstadoFinal),
-        retract(semaforo_estado(SemaforoActual, EstadoActual2)),
-        assertz(semaforo_estado(SemaforoActual, EstadoFinal))
-    ;
-        true
-    ),
-    semaforo_estado(SiguienteSemaforo, EstadoSiguiente),
-    (EstadoSiguiente == rojo ->
-        transicion(EstadoSiguiente, NuevoEstadoSiguiente),
-        retract(semaforo_estado(SiguienteSemaforo, EstadoSiguiente)),
-        assertz(semaforo_estado(SiguienteSemaforo, NuevoEstadoSiguiente))
-    ;
-        true
-    ).
+% Actualizar los estados dinámicos de los semáforos
+actualizar_estados([E1, E2, E3, E4]) :-
+    retractall(semaforo_estado(sem1, _)),
+    assertz(semaforo_estado(sem1, E1)),
+    retractall(semaforo_estado(sem2, _)),
+    assertz(semaforo_estado(sem2, E2)),
+    retractall(semaforo_estado(sem3, _)),
+    assertz(semaforo_estado(sem3, E3)),
+    retractall(semaforo_estado(sem4, _)),
+    assertz(semaforo_estado(sem4, E4)),
+    format('Estados actualizados: ~w, ~w, ~w, ~w~n', [E1, E2, E3, E4]).
+
+
+
+% Consultar el estado actual de los semáforos
+estado_actual([Sem1, Sem2, Sem3, Sem4], [E1, E2, E3, E4]) :-
+    semaforo_estado(Sem1, E1),
+    semaforo_estado(Sem2, E2),
+    semaforo_estado(Sem3, E3),
+    semaforo_estado(Sem4, E4).

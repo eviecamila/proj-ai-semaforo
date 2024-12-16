@@ -1,10 +1,9 @@
-import sqlite3
-from datetime import datetime
 from pyswip import Prolog
 import RPi.GPIO as GPIO
 import time
 import cv2
 import numpy as np
+from datetime import datetime
 
 # Configuración de pines GPIO
 GPIO.setmode(GPIO.BCM)
@@ -16,7 +15,7 @@ led_pins = {
     'green': [12, 16, 20, 21]
 }
 
-# Inicialización de pines como salida
+# Inicialización de pines GPIO
 for color in led_pins:
     for pin in led_pins[color]:
         GPIO.setup(pin, GPIO.OUT)
@@ -30,23 +29,15 @@ car_cascade = cv2.CascadeClassifier('haarcascade_car.xml')
 prolog = Prolog()
 prolog.consult("traffic_logic.pl")
 
-# Función para sincronizar el semáforo basado en Prolog
-def sincronizar_cruce(cruce):
-    print(f"Sincronizando cruce: {cruce}")
-    for sol in prolog.query(f"sincronizar_cruce({cruce})"):
-        print(f"Prolog actualizado: {sol}")
-    estados = list(prolog.query(f"estado_cruce({cruce}, Estados)"))
-    if estados:
-        return estados[0]['Estados']
-    return None
+# Función para obtener el estado actual de los semáforos
+def obtener_estados():
+    consulta = list(prolog.query("estado_actual([sem1, sem2, sem3, sem4], Estados)"))
+    if consulta:
+        return consulta[0]['Estados']
+    return ['rojo', 'rojo', 'rojo', 'rojo']  # Default en caso de error
 
-# Actualiza el semáforo en hardware
-def actualizar_semaforos(cruce, estados):
-    semaforos = {
-        'sem1': 0, 'sem2': 1, 'sem3': 2, 'sem4': 3,
-        'sem5': 0, 'sem6': 1, 'sem7': 2, 'sem8': 3,
-        'sem9': 0, 'sem10': 1, 'sem11': 2, 'sem12': 3
-    }
+# Función para actualizar el hardware de los semáforos
+def actualizar_semaforos(estados):
     for i, estado in enumerate(estados):
         if estado == 'verde':
             GPIO.output(led_pins['green'][i], GPIO.HIGH)
@@ -58,30 +49,25 @@ def actualizar_semaforos(cruce, estados):
             GPIO.output(led_pins['green'][i], GPIO.LOW)
         elif estado == 'rojo':
             GPIO.output(led_pins['red'][i], GPIO.HIGH)
-            GPIO.output(led_pins['green'][i], GPIO.LOW)
             GPIO.output(led_pins['yellow'][i], GPIO.LOW)
+            GPIO.output(led_pins['green'][i], GPIO.LOW)
 
+# Función principal del programa
 try:
+    print("Iniciando control de semáforos...")
     while True:
-        # Capturar vehículos usando OpenCV
-        ret, frame = cap.read()
-        if not ret:
-            continue
-        
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        cars = car_cascade.detectMultiScale(gray, 1.1, 1)
-        num_vehiculos = len(cars)
+        # Avanzar el estado en Prolog
+        list(prolog.query("avanzar_estado."))
 
-        # Obtener la fecha actual y consultar datos fijos
-        current_date = datetime.now().strftime("%Y-%m-%d")
+        # Obtener el estado actualizado de los semáforos
+        estados = obtener_estados()
+        print(f"Estados actualizados: {estados}")
 
-        # Sincronizar cada cruce dinámicamente
-        for cruce in ['cruce1', 'cruce2', 'cruce3']:
-            estados = sincronizar_cruce(cruce)
-            if estados:
-                print(f"Estados del cruce {cruce}: {estados}")
-                actualizar_semaforos(cruce, estados)
-            time.sleep(5)  # Tiempo de espera entre sincronizaciones
+        # Actualizar el hardware de los semáforos
+        actualizar_semaforos(estados)
+
+        # Simulación de pausa entre transiciones
+        time.sleep(3)
 
 except KeyboardInterrupt:
     print("\nInterrupción detectada. Limpiando recursos...")
